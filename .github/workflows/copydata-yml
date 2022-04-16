@@ -1,0 +1,19 @@
+name: Copy data FINDCovTrackerData repository
+ 
+on:
+  schedule:
+    - cron: "0 17 * * *"
+    - cron: "0 21 * * *"
+    - cron: "0 6 * * *"
+ 
+jobs:
+ build:
+   name: Build
+   runs-on: ubuntu-latest
+ 
+   steps:
+     - uses: actions/checkout@v2
+     - name: copy data
+	   - uses: canastro/copy-file-action@master 
+       	source: "https://github.com/finddx/FINDCov19TrackerData/blob/master/processed/data_all.csv"
+	      target: "https://github.com/JuanVallarta/CovTracker/tree/main/data/data_all.csv"
