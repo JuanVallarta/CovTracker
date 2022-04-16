@@ -30,8 +30,8 @@ Sys.setlocale("LC_TIME", "C")
 ```
 
 ```{r}
-#Read dataset usig fread for large datasets
-covid_dataset <- fread("https://raw.githubusercontent.com/finddx/FINDCov19TrackerData/master/processed/data_all.csv")
+#Read dataset using fread for large datasets
+covid_dataset <-fread("https://raw.githubusercontent.com/JuanVallarta/CovTracker/main/data/data_all.csv") 
 covid_dataset <- covid_dataset %>%
     filter(set=="country")
 
