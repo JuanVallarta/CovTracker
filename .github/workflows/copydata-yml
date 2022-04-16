@@ -18,8 +18,8 @@ jobs:
    runs-on: ubuntu-latest
  
    steps:
-     - uses: actions/checkout@v2
-     - name: copy data
+     - uses: actions/checkout@master
+     - name: copy file
        uses: canastro/copy-file-action@master 
        with: 
        	source: "https://raw.githubusercontent.com/finddx/FINDCov19TrackerData/master/processed/data_all.csv"
