@@ -1,0 +1,194 @@
+---
+title: "FINDCovTracker"
+output: 
+  flexdashboard::flex_dashboard:
+    social: menu
+    source: embed
+    theme: yeti
+    orientation: columns
+    vertical_layout: fill
+    
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+#Load libraries
+library(data.table)
+library(flexdashboard)
+library(shiny)
+library(dplyr)
+library(lubridate)
+library(stringr)
+library(DT)
+library(highcharter)
+
+#Remove summarise output in console
+options(dplyr.summarise.inform=F)
+
+#Set English as default language (for lubridate date calculations)
+Sys.setlocale("LC_TIME", "C")
+```
+
+```{r}
+#Read dataset usig fread for large datasets
+covid_dataset <- fread("https://raw.githubusercontent.com/finddx/FINDCov19TrackerData/master/processed/data_all.csv")
+covid_dataset <- covid_dataset %>%
+    filter(set=="country")
+
+#Function to summarize average rates and number of days per metric, period and countries#
+summarise_data <- function(metric,time_period,countries){
+  summarised_dataset <- covid_dataset %>%
+    #Filter by selected countries
+    filter(name %in% countries) %>% 
+    #Remove NA and 0 values
+    filter(!is.na(!!sym(metric))&!!sym(metric)!=0) %>% 
+    #Group observations by time period
+    mutate(Date=floor_date(as_date(time),time_period)) %>% 
+    group_by(Country=name,Date)%>% 
+    #Summarize number of days and average rates
+    summarise("Days"=n(),
+              "Rates"= round(mean(!!sym(metric)),4)) %>% 
+    #Format date variable
+    mutate(Date=paste(lubridate::year(Date),str_to_title(as.character(lubridate::month(Date,label=T,abbr=F))),sep=" "))
+  
+  #Transform months into quartes, if selected
+  if(time_period=="quarter"){
+    summarised_dataset <- summarised_dataset %>%
+      mutate(Date=str_replace_all(Date,c("January"="Quarter 1","April"="Quarter 2","July"="Quarter 3","October"="Quarter 4")))
+  }
+  return(summarised_dataset)
+}
+
+#Function to create interactive boxplots#
+create_boxplot <- function(dataset,outcome,time_period){
+  
+  #Create a boxplot object (highcharter library)
+  fig <- data_to_boxplot(dataset,!!sym(outcome),Country,group_var="Country",add_outliers=F)
+
+  #Create the boxplot 
+  fig_boxplot <- highchart() %>%
+    #Zoom chart
+    hc_chart(zoomType="xy") %>% 
+    #Call the boxplot object
+    hc_add_series_list(fig)%>%
+    #Define x axis
+    hc_xAxis(type="category",title=list(text="Countries")) %>%
+    #Define y axis
+    hc_yAxis(title=list(text=paste0(outcome, " per ",time_period))) %>%
+    #Match data points with boxplot
+    hc_plotOptions(
+      scatter=list(jitter=list(x=0.1,y=0)),
+      series=list(grouping=F)
+      ) %>% 
+    #Define data points style
+    hc_plotOptions(scatter=list(color="black",marker=list(radius=2,symbol="circle",lineWidth=0.5))) %>% 
+    #Remove legend
+    hc_legend(enabled=F)
+  
+  return(fig_boxplot)
+}
+```
+
+Column {.sidebar data-width=300}
+-------------------------------------
+Welcome to the FIND Covid-19 tracker. This interactive tool allows you to observe the daily number of Covid-19 tests, cases and deaths, and the corresponding average rates per capita (1000 people), reported by each country on a monthly and quarterly basis.
+<br/>
+Data is updated on a daily basis from https://github.com/finddx/FINDCov19TrackerData
+<br/>
+
+```{r}
+#Set the widgets' options
+#Metrics
+vars_metric <- c("Tests","Cases","Deaths")
+#Period
+vars_period <- c("Month"="month","Quarter"="quarter")
+#Countries
+vars_country <- sort(unique(covid_dataset$name))
+
+#Set the widgets
+#Metric
+selectInput(inputId="var_metric",label="Select the metric",choices=vars_metric,selected="Tests")
+#Period
+selectInput(inputId="var_period",label="Select the period",choices=vars_period,selected="quarter")
+#Countries
+selectizeInput(inputId="var_countries",label="Select the countries (maximum 6)",choices=vars_country,multiple=T,options=list(maxItems=6),selected="Switzerland")
+```
+
+Column {data-width=350}
+-------------------------------------
+### Number of reported days
+```{r}
+#Create a reactive dataset
+data_daily_num <- reactive ({
+  #Select variable based on metric
+  if (input$var_metric=="Tests"){
+    var_daily_num <- "new_tests_orig"
+  } else if (input$var_metric=="Cases"){
+    var_daily_num <- "new_cases_orig"
+  } else if (input$var_metric=="Deaths"){
+    var_daily_num <- "new_deaths_orig"
+  }
+  
+  #Summarize the dataset
+  summarise_data(var_daily_num,input$var_period,input$var_countries)
+})
+
+#Render table
+DT::renderDataTable({
+  DT::datatable(data_daily_num()[,c("Country","Date","Days")],rownames=F,options=list(pageLength=5,dom="ftp"))
+})
+```
+
+### Boxplot number of reported days
+```{r}
+#Create reactive boxplot
+boxplot_daily_num <- reactive ({
+  create_boxplot(data_daily_num(),"Days",input$var_period)
+})
+
+#Render boxplot
+highcharter::renderHighchart({
+  boxplot_daily_num()%>%
+    #Add data points (this function needs to be called here as the hcaes function does not accept local or global variables)
+    hc_add_series(data=data_daily_num(),type="scatter",hcaes(x="Country",y="Days",group="Country"))
+})
+```
+
+Column {data-width=350}
+-------------------------------------
+### Averages rates per capita
+```{r}
+#Create a reactive dataset
+data_avg_rate <- reactive ({
+  #Select variable based on metric
+  if (input$var_metric=="Tests"){
+    var_avg_rate <- "cap_new_tests"
+  } else if (input$var_metric=="Cases"){
+    var_avg_rate <- "cap_new_cases"
+  } else if (input$var_metric=="Deaths"){
+    var_avg_rate <- "cap_new_deaths"
+  }
+  #Summarize the dataset
+  summarise_data(var_avg_rate,input$var_period,input$var_countries)
+})
+
+#Render table
+DT::renderDataTable({
+  DT::datatable(data_avg_rate()[,c("Country","Date","Rates")],rownames=F,options=list(pageLength=5,dom="ftp"))
+})
+```
+
+### Boxplot average rates per capita
+```{r}
+#Create reactive boxplot
+boxplot_avg_rate <- reactive ({
+  create_boxplot(data_avg_rate(),"Rates",input$var_period)
+})
+#Render boxplot
+highcharter::renderHighchart({
+  boxplot_avg_rate()%>%
+        #Add data points (this function needs to be called here as the hcaes function does not accept local or global variables)
+    hc_add_series(data=data_avg_rate(),type="scatter",hcaes(x="Country",y="Rates",group="Country"))
+})
+```
+
