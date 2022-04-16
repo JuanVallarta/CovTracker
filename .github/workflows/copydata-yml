@@ -17,4 +17,4 @@ jobs:
        uses: canastro/copy-file-action@master 
        with: 
        	source: "https://github.com/finddx/FINDCov19TrackerData/blob/master/processed/data_all.csv"
-	target: "https://github.com/JuanVallarta/CovTracker/tree/main/data/data_all.csv"
+	target: "https://github.com/JuanVallarta/CovTracker/blob/main/data/data_all.csv"
