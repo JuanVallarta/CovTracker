@@ -2,8 +2,14 @@ name: Copy data FINDCovTrackerData repository
  
 on:
   schedule:
+    - cron: "0 15 * * *"
+    - cron: "0 16 * * *"
     - cron: "0 17 * * *"
+    - cron: "0 18 * * *"
+    - cron: "0 19 * * *"
+    - cron: "0 20 * * *"
     - cron: "0 21 * * *"
+    - cron: "0 22 * * *"
     - cron: "0 6 * * *"
  
 jobs:
@@ -16,5 +22,5 @@ jobs:
      - name: copy data
        uses: canastro/copy-file-action@master 
        with: 
-       	source: "https://github.com/finddx/FINDCov19TrackerData/blob/master/processed/data_all.csv"
-	target: "https://github.com/JuanVallarta/CovTracker/blob/main/data/data_all.csv"
+       	source: "https://raw.githubusercontent.com/finddx/FINDCov19TrackerData/master/processed/data_all.csv"
+	target: "https://raw.githubusercontent.com/JuanVallarta/CovTracker/main/data/data_all.csv"
