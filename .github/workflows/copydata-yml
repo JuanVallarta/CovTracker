@@ -14,13 +14,20 @@ on:
  
 jobs:
  build:
-   name: Build
    runs-on: ubuntu-latest
  
-   steps:
-     - uses: actions/checkout@master
-     - name: copy file
-       uses: canastro/copy-file-action@master 
-       with: 
-       	source: "https://raw.githubusercontent.com/finddx/FINDCov19TrackerData/master/processed/data_all.csv"
-	target: "https://raw.githubusercontent.com/JuanVallarta/CovTracker/main/data/data_all.csv"
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+        with:
+          repository:  finddx/FINDCov19TrackerData
+          path: processed/
+      - name: dist-to-ft
+        uses: isthatcentered/dist-to-ftp@v1
+        with:
+          host: https://github.com/JuanVallarta/CovTracker
+          user: ${{ secrets.FtpUser }}
+          password: ${{ secrets.FtpPassword }}
+          path: ./data/
+          into: https://github.com/JuanVallarta/CovTracker/blob/main/data/data_all.csv
+	  cleanupExisting: true
