@@ -1,5 +1,5 @@
 name: Copy data FINDCovTrackerData repository
- 
+
 on:
   workflow_dispatch:
   push:
@@ -16,22 +16,22 @@ on:
     - cron: "0 24 * * *"
     - cron: "0 1 * * *"
     - cron: "0 2 * * *"
- 
- jobs:
+
+  jobs:
     runs-on: ubuntu-latest
- 
+
     steps:
       - uses: actions/checkout@v2
       - name: get data
-	run: |
-	  curl https://raw.githubusercontent.com/finddx/FINDCov19TrackerData/master/processed/data_all.csv
+        run: |
+          curl https://raw.githubusercontent.com/finddx/FINDCov19TrackerData/master/processed/data_all.csv
       - name: Add data
         run: |
-	  git add data/data_all.csv
+          git add data/data_all.csv
       - name: Commit data
         run: |
-	  git commit -m "data updated"
+          git commit -m "data updated"
       - name: Push data
-	uses: ad-m/github-push-action@master
-	run: |
-	  git push origin main
+        uses: ad-m/github-push-action@master
+        run: |
+          git push origin main
