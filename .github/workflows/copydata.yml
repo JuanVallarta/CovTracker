@@ -13,8 +13,8 @@ jobs:
         - uses: actions/checkout@v2
         - name: update data
           run: |
-            git config --global user.name 'JuanVallarta'
-            git config --global user.email 'vallartajuan@hotmail.com'
+            git config --global user.name 'GitHub Action'
+            git config --global user.email 'action@github.com'
             cd data/ && { curl -O https://raw.githubusercontent.com/finddx/FINDCov19TrackerData/master/processed/data_all.csv ; cd -; }
             git add data/data_all.csv
             git commit -m "data updated" || echo "Nothing to update"
