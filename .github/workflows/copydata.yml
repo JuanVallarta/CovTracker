@@ -13,8 +13,8 @@ on:
       - uses: actions/checkout@v2
       - name: update data
         run: |
-          #git config --global user.name 'JuanVallarta'
-          #git config --global user.email 'vallartajuan@hotmail.com'
+          git config --global user.name 'JuanVallarta'
+          git config --global user.email 'vallartajuan@hotmail.com'
           curl https://raw.githubusercontent.com/finddx/FINDCov19TrackerData/master/processed/data_all.csv
           git add data/data_all.csv
           git commit -m "data updated"
