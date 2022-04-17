@@ -3,19 +3,19 @@ name: Copy data FINDCovTrackerData repository
 on:
   workflow_dispatch:
   push:
-    schedule:
+  schedule:
     - cron: "*/5 * * * *"
 
-  jobs:
+jobs:
+  build:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v2
-      - name: update data
-        run: |
-          git config --global user.name 'JuanVallarta'
-          git config --global user.email 'vallartajuan@hotmail.com'
-          curl https://raw.githubusercontent.com/finddx/FINDCov19TrackerData/master/processed/data_all.csv
-          git add data/data_all.csv
-          git commit -m "data updated"
-          git push
+        - uses: actions/checkout@v2
+        - name: update data
+          run: |
+            git config --global user.name 'JuanVallarta'
+            git config --global user.email 'vallartajuan@hotmail.com'
+            curl https://raw.githubusercontent.com/finddx/FINDCov19TrackerData/master/processed/data_all.csv
+            git add data/data_all.csv
+            git commit -m "data updated"
+            git push origin main
