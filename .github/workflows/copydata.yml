@@ -17,5 +17,5 @@ jobs:
             git config --global user.email 'vallartajuan@hotmail.com'
             cd data/ && { curl -O https://raw.githubusercontent.com/finddx/FINDCov19TrackerData/master/processed/data_all.csv ; cd -; }
             git add data/data_all.csv
-            git commit -m "data updated"
+            git commit -m "data updated" || echo "Nothing to update"
             git push origin main
