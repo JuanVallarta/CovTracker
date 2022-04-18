@@ -1,0 +1,320 @@
+---
+title: "FINDCovTracker"
+output: 
+  flexdashboard::flex_dashboard:
+    social: menu
+    source: embed
+    theme: yeti
+    orientation: columns
+    vertical_layout: fill
+    
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+#Load libraries
+library(data.table)
+library(flexdashboard)
+library(shiny)
+library(dplyr)
+library(lubridate)
+library(stringr)
+library(DT)
+library(highcharter)
+
+#Remove summarise output in console
+options(dplyr.summarise.inform=F)
+
+#Set English as default language (for lubridate date calculations)
+Sys.setlocale("LC_TIME", "C")
+```
+
+```{r}
+#Read dataset usig fread for large datasets
+covid_dataset <- fread("https://raw.githubusercontent.com/JuanVallarta/CovTracker/main/data/data_all.csv")
+covid_dataset <- covid_dataset %>%
+    filter(set=="country") %>% 
+  mutate(Date_format=lubridate::as_date(str_replace(time," ","-"))) %>% 
+  #Rename some countries for the maps
+  mutate(name=case_when(
+    name=="United States"~"United States of America",
+    name=="Republic of the Congo"~"Republic of Congo",
+    name=="Myanmar (Burma)"~"Myanmar",
+    name=="Serbia"~"Republic of Serbia",
+    name=="Bosnia & Herzegovina"~"Bosnia and Herzegovina",
+    name=="North Macedonia"~"Macedonia",
+    TRUE~name
+  ))
+
+###FUNCTIONS###
+#Function to summarize average rates and number of days per metric, period and countries#
+summarise_data <- function(metric,time_period,countries,date1,date2){
+  summarised_dataset <- covid_dataset %>%
+    #Filter by selected countries
+    filter(name %in% countries) %>% 
+    #Filter by selected dates
+    filter(time>=date1 & time<=date2) %>% 
+    #Remove NA and 0 values
+    filter(!is.na(!!sym(metric))&!!sym(metric)!=0) %>% 
+    #Group observations by time period
+    mutate(Date=floor_date(as_date(time),time_period)) %>% 
+    group_by(Country=name,Date)%>% 
+    #Summarize number of days and average rates
+    summarise("Days"=n(),
+              "Rates"= round(mean(!!sym(metric)),4)) %>%
+    #Arrange by country and date
+    arrange(Country,Date) %>% 
+    #Format date variable
+    mutate(Date=paste(lubridate::year(Date),str_to_title(as.character(lubridate::month(Date,label=T,abbr=F))),sep=" "))
+  
+  #Transform months into quartes, if selected
+  if(time_period=="quarter"){
+    summarised_dataset <- summarised_dataset %>%
+      mutate(Date=str_replace_all(Date,c("January"="Quarter 1","April"="Quarter 2","July"="Quarter 3","October"="Quarter 4")))
+  }
+  #Create a new variable with a date format
+  summarised_dataset <- summarised_dataset %>%
+    mutate(Date_format=lubridate::ym(str_replace(Date," ","-")))
+
+  return(summarised_dataset)
+}
+
+#Function to summarize average rates and number of days per country and time period (maps)#
+summarise_data_map <- function(dataset){
+  summarised_dataset_map <- dataset %>% 
+    group_by(Country)%>%
+    #Summarize number of days and average rates
+    summarise("Days"=round(mean(Days),4),
+               "Rates"= round(mean(Rates),4))
+  return(summarised_dataset_map)
+}
+
+#Function to create interactive boxplots#
+create_boxplot <- function(dataset,outcome,time_period){
+  #Create a boxplot object (highcharter library)
+  fig <- data_to_boxplot(dataset,!!sym(outcome),Country,group_var="Country",add_outliers=F)
+
+  #Create the boxplot 
+  fig_boxplot <- highchart() %>%
+    #Zoom chart
+    hc_chart(zoomType="xy") %>% 
+    #Call the boxplot object
+    hc_add_series_list(fig)%>%
+    #Define x axis
+    hc_xAxis(type="category",title=list(text="Countries")) %>%
+    #Define y axis
+    hc_yAxis(title=list(text=paste0(outcome, " per ",time_period))) %>%
+    hc_add_series(data=dataset,type="scatter",hcaes(x=Country,y=!!sym(outcome),group=Country)) %>%
+    #Match data points with boxplot
+    hc_plotOptions(
+      scatter=list(jitter=list(x=0.1,y=0)),
+      series=list(grouping=F)
+      ) %>% 
+    #Define data points style
+    hc_plotOptions(scatter=list(color="black",marker=list(radius=2,symbol="circle",lineWidth=0.5))) %>% 
+    #Remove legend
+    hc_legend(enabled=F)
+  
+  return(fig_boxplot)
+}
+
+
+#Function to plot time series lines
+create_timeseries <- function(dataset,outcome,time_period){
+  fig_timeseries <-
+    #Create line chart
+    hchart(dataset,"line",hcaes(x=Date_format,y=!!sym(outcome),group=Country)) %>% 
+  #Make legend compare all countries at same time when hover
+  hc_tooltip(crosshairs=T,shared=T,borderWidth=1) %>% 
+  #Zoom chart
+  hc_chart(zoomType="xy") %>% 
+  #Defin x axis
+  hc_xAxis(title=list(text="Dates")) %>%
+  #Define y axis
+  hc_yAxis(title=list(text=paste0(outcome, " per ",time_period)))
+  
+  return(fig_timeseries)
+}
+
+#Function to create the maps
+create_map <- function(dataset,outcome,time_period){
+  fig_map <- highchart() %>% 
+    #Define map
+    hc_add_series_map(worldgeojson,data_avg_rate_map(),name=paste0("Average ", outcome," per ", time_period),value=outcome,joinBy=c("name","Country")) %>% 
+    #Color map
+    hc_colorAxis(stops=color_stops()) %>% 
+    #Set navigation for the map
+    hc_mapNavigation(enabled=T)
+}
+```
+
+Column {.sidebar data-width=300}
+=====================================
+Welcome to the FIND Covid-19 tracker. This interactive tool allows you to observe the daily number of Covid-19 tests, cases and deaths, and the corresponding average rates per capita (1000 people), reported by each country on a monthly and quarterly basis.
+<br/>
+Data is updated on a daily basis from https://github.com/finddx/FINDCov19TrackerData
+<br/>
+
+```{r}
+#Set the widgets' options
+#Metrics
+vars_metric <- c("Tests","Cases","Deaths")
+#Period
+vars_period <- c("Month"="month","Quarter"="quarter")
+#Countries
+vars_country <- sort(unique(covid_dataset$name))
+#Date ranges
+vars_date_min <- min(covid_dataset$Date_format)
+vars_date_max <- max(covid_dataset$Date_format)
+
+#Set the widgets
+#Metric
+selectInput(inputId="var_metric",label="Select the metric",choices=vars_metric,selected="Tests")
+#Period
+selectInput(inputId="var_period",label="Select the period",choices=vars_period,selected="quarter")
+#Countries
+selectizeInput(inputId="var_countries",label="Select the countries (maximum 6)",choices=vars_country,multiple=T,options=list(maxItems=6),selected=c("Switzerland","United States of America"))
+#Dates
+sliderInput(inputId="var_dates",label="Date range",min=vars_date_min,max=vars_date_max,value=c(vars_date_min,vars_date_max))
+```
+
+Tables {data-icon="fa-table"} 
+=====================================
+Column {data-width=350}
+-------------------------------------
+### Number of reported days
+```{r}
+#Create a reactive dataset
+data_daily_num <- reactive ({
+  #Select variable based on metric
+  if (input$var_metric=="Tests"){
+    var_daily_num <- "new_tests_orig"
+  } else if (input$var_metric=="Cases"){
+    var_daily_num <- "new_cases_orig"
+  } else if (input$var_metric=="Deaths"){
+    var_daily_num <- "new_deaths_orig"
+  }
+  
+  #Summarize the dataset
+  summarise_data(var_daily_num,input$var_period,input$var_countries,input$var_dates[1],input$var_dates[2])
+})
+
+#Render table
+DT::renderDataTable({
+  DT::datatable(data_daily_num()[,c("Country","Date","Days")],rownames=F,options=list(pageLength=15,dom="ftp"))
+})
+```
+
+Column {data-width=350}
+-------------------------------------
+### Averages rates per capita
+```{r}
+#Create a reactive dataset
+data_avg_rate <- reactive ({
+  #Select variable based on metric
+  if (input$var_metric=="Tests"){
+    var_avg_rate <- "cap_new_tests"
+  } else if (input$var_metric=="Cases"){
+    var_avg_rate <- "cap_new_cases"
+  } else if (input$var_metric=="Deaths"){
+    var_avg_rate <- "cap_new_deaths"
+  }
+  #Summarize the dataset
+  summarise_data(var_avg_rate,input$var_period,input$var_countries,input$var_dates[1],input$var_dates[2])
+})
+
+#Render table
+DT::renderDataTable({
+  DT::datatable(data_avg_rate()[,c("Country","Date","Rates")],rownames=F,options=list(pageLength=15,dom="ftp"))
+})
+```
+
+Plots {data-icon="fa-chart-pie"} 
+=====================================
+Column {data-width=350}
+-------------------------------------
+### Boxplot number of reported days
+```{r}
+#Create reactive boxplot
+boxplot_daily_num <- reactive ({
+  create_boxplot(data_daily_num(),"Days",input$var_period)
+})
+
+#Render boxplot
+highcharter::renderHighchart({
+  boxplot_daily_num() 
+})
+```
+
+### Time series of reported days
+```{r}
+#Create reactive time series
+timeseries_daily_num <- reactive ({
+  create_timeseries(data_daily_num(),"Days",input$var_period)
+})
+highcharter::renderHighchart({
+  timeseries_daily_num() 
+})
+```
+
+Column {data-width=350}
+-------------------------------------
+### Boxplot average rates per capita
+```{r}
+#Create reactive boxplot
+boxplot_avg_rate <- reactive ({
+  create_boxplot(data_avg_rate(),"Rates",input$var_period)
+})
+#Render boxplot
+highcharter::renderHighchart({
+  boxplot_avg_rate() 
+
+})
+```
+
+### Time series average rates per capita
+```{r}
+timeseries_avg_rate <- reactive ({
+  create_timeseries(data_avg_rate(),"Rates",input$var_period)
+})
+highcharter::renderHighchart({
+  timeseries_avg_rate() 
+})
+```
+
+Maps {data-icon="fa-map"} 
+=====================================
+### Map average reported days
+```{r}
+#Create a reactive dataset
+data_daily_num_map <- reactive ({
+  #Summarize the dataset
+  summarise_data_map(data_daily_num())
+})
+#Create reactive map
+map_daily_num <- reactive ({
+  create_map(data_daily_num_map(),"Days",input$var_period)
+})
+#Render map
+highcharter::renderHighchart({
+  map_daily_num()
+})
+```
+
+### Map average rates per capita
+```{r}
+#Create a reactive dataset
+data_avg_rate_map <- reactive ({
+  #Summarize the dataset
+  summarise_data_map(data_avg_rate())
+})
+#Create reactive map
+map_avg_rate <- reactive ({
+  create_map(data_avg_rate_map(),"Rates",input$var_period)
+})
+#Render map
+highcharter::renderHighchart({
+  map_avg_rate()
+})
+```
+
