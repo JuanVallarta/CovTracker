@@ -48,6 +48,8 @@ summarise_data <- function(metric,time_period,countries){
     #Summarize number of days and average rates
     summarise("Days"=n(),
               "Rates"= round(mean(!!sym(metric)),4)) %>% 
+    #Arrange by country and date
+    arrange(Country,Date) %>%
     #Format date variable
     mutate(Date=paste(lubridate::year(Date),str_to_title(as.character(lubridate::month(Date,label=T,abbr=F))),sep=" "))
   
